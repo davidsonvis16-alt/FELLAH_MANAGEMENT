@@ -18,8 +18,8 @@ export function LoginForm({ demo }: { demo: boolean }) {
     <div className="flex flex-col gap-3">
       {demo ? (
         <div className="card p-5">
-          <h2 className="card-title m-0 mb-1">Chagua jukumu · Choose a role</h2>
-          <p className="ink-2 m-0 mb-4 text-[13px]">One click, no password. Seeded data: 62 students, 6 teachers, 3 classes, four weeks of Term 1.</p>
+          <h2 className="card-title m-0 mb-1">Ingia kama · Sign in as</h2>
+          <p className="ink-2 m-0 mb-4 text-[13px]">Choose who you are to continue.</p>
           <FormError message={demoState.error} />
           <form action={demoAction} className="flex flex-col gap-2">
             {DEMO.map((account) => (
@@ -63,11 +63,6 @@ export function LoginForm({ demo }: { demo: boolean }) {
           <button type="submit" className="btn btn-primary mt-1 justify-center" disabled={pending}>
             {pending ? "Tunaingia..." : "Ingia · Sign in"}
           </button>
-          {demo ? (
-            <p className="muted m-0 text-[12px]">
-              Every seeded account uses the password <code>password123</code>.
-            </p>
-          ) : null}
         </form>
       </details>
     </div>

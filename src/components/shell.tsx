@@ -113,7 +113,7 @@ export async function AppShell({
           </div>
           <form action={logout} className="mt-3 px-1">
             <button type="submit" className="btn btn-sm w-full justify-center">
-              {demo ? "Switch role" : "Sign out · Toka"}
+              {demo ? "Switch user · Badili" : "Sign out · Toka"}
             </button>
           </form>
         </div>
@@ -136,14 +136,9 @@ export async function AppShell({
               <NairobiClock seconds />
               <span className="muted text-[10.5px]">EAT</span>
             </span>
-            {demo ? (
-              <span className="badge" style={{ color: "#fff", background: "var(--kenya-red)", borderColor: "var(--kenya-red)" }}>
-                <span className="text-[10.5px] font-bold tracking-[0.08em]">DEMO</span>
-              </span>
-            ) : null}
             <form action={logout} className="md:hidden">
               <button type="submit" className="btn btn-sm">
-                {demo ? "Switch" : "Sign out"}
+                {demo ? "Switch user" : "Sign out"}
               </button>
             </form>
           </div>

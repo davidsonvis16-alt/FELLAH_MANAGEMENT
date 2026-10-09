@@ -52,16 +52,16 @@ const DEMO_ACCOUNTS: Record<string, string> = {
 };
 
 export async function demoLogin(_prev: LoginState, formData: FormData): Promise<LoginState> {
-  if (!isDemoMode()) return { error: "Demo sign-in is turned off" };
+  if (!isDemoMode()) return { error: "Quick sign-in is not available. Use your email and password." };
   const email = DEMO_ACCOUNTS[String(formData.get("role"))];
-  if (!email) return { error: "Unknown demo account" };
+  if (!email) return { error: "Choose who you are signing in as" };
 
   const user = await db.user.findUnique({
     where: { email },
     include: { teacher: { select: { id: true } }, student: { select: { id: true } } },
   });
   if (!user || !user.isActive) {
-    return { error: "Demo data is missing - run npm run db:reset" };
+    return { error: "This account is not available right now. Try again later." };
   }
 
   await startSession({
