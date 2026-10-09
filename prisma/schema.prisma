@@ -1,0 +1,341 @@
+// FELLAH - school management system
+//
+// Provider is SQLite so the app runs with no database server. The model is kept
+// PostgreSQL-portable: no SQLite-only types, and every status/role field is a
+// String whose allowed values live in src/lib/enums.ts (SQLite has no enums).
+// See README -> "Moving to PostgreSQL".
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------- identity
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  phone        String?
+  role         String // Role: ADMIN | TEACHER | STUDENT | GUARDIAN
+  isActive     Boolean  @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  teacher       Teacher?
+  student       Student?
+  guardian      Guardian?
+  activity      ActivityLog[]  @relation("ActorActivity")
+  announcements Announcement[]
+  payments      FeePayment[]
+
+  @@index([role])
+}
+
+// ---------------------------------------------------------------- academic calendar
+
+model AcademicYear {
+  id        String   @id @default(cuid())
+  name      String   @unique // "2026"
+  startsOn  DateTime
+  endsOn    DateTime
+  isCurrent Boolean  @default(false)
+  terms     Term[]
+}
+
+model Term {
+  id        String   @id @default(cuid())
+  name      String // "Term 1"
+  yearId    String
+  year      AcademicYear @relation(fields: [yearId], references: [id], onDelete: Cascade)
+  startsOn  DateTime
+  endsOn    DateTime
+  isCurrent Boolean  @default(false)
+
+  attendanceSessions AttendanceSession[]
+  assessments        Assessment[]
+  invoices           FeeInvoice[]
+
+  @@unique([yearId, name])
+}
+
+// ---------------------------------------------------------------- structure
+
+model Class {
+  id             String  @id @default(cuid())
+  name           String // "Mechatronics - Year 1"
+  code           String  @unique // "MECH-Y1"
+  level          Int // 1..4
+  capacity       Int     @default(60)
+  classTeacherId String?
+  classTeacher   Teacher? @relation("ClassTeacher", fields: [classTeacherId], references: [id], onDelete: SetNull)
+  createdAt      DateTime @default(now())
+
+  students      Student[]
+  classSubjects ClassSubject[]
+}
+
+model Subject {
+  id          String  @id @default(cuid())
+  name        String
+  code        String  @unique // "MAT101"
+  description String?
+
+  classSubjects ClassSubject[]
+}
+
+// A subject as taught to one class by one teacher: the unit attendance and
+// marks actually hang off.
+model ClassSubject {
+  id        String  @id @default(cuid())
+  classId   String
+  class     Class   @relation(fields: [classId], references: [id], onDelete: Cascade)
+  subjectId String
+  subject   Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  teacherId String?
+  teacher   Teacher? @relation(fields: [teacherId], references: [id], onDelete: SetNull)
+
+  attendanceSessions AttendanceSession[]
+  assessments        Assessment[]
+  slots              TimetableSlot[]
+
+  @@unique([classId, subjectId])
+  @@index([teacherId])
+}
+
+// ---------------------------------------------------------------- people
+
+model Teacher {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  staffNo       String   @unique
+  qualification String?
+  employedOn    DateTime @default(now())
+
+  classSubjects   ClassSubject[]
+  classesLed      Class[]             @relation("ClassTeacher")
+  sessionsTaken   AttendanceSession[]
+  marksEntered    Mark[]
+}
+
+model Student {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  admissionNo String   @unique
+  classId     String?
+  class       Class?   @relation(fields: [classId], references: [id], onDelete: SetNull)
+  gender      String // Gender: MALE | FEMALE | OTHER
+  dateOfBirth DateTime?
+  admittedOn  DateTime @default(now())
+  status      String   @default("ACTIVE") // StudentStatus: ACTIVE | SUSPENDED | GRADUATED | TRANSFERRED
+  address     String?
+  notes       String?
+
+  attendance Attendance[]
+  marks      Mark[]
+  guardians  StudentGuardian[]
+  invoices   FeeInvoice[]
+
+  @@index([classId])
+  @@index([status])
+}
+
+model Guardian {
+  id           String  @id @default(cuid())
+  userId       String? @unique // null until the parent portal (V2) issues a login
+  user         User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+  name         String
+  phone        String
+  email        String?
+  occupation   String?
+  address      String?
+  relationship String // Relationship: MOTHER | FATHER | GUARDIAN | SPONSOR | OTHER
+
+  students StudentGuardian[]
+}
+
+model StudentGuardian {
+  studentId  String
+  student    Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  guardianId String
+  guardian   Guardian @relation(fields: [guardianId], references: [id], onDelete: Cascade)
+  isPrimary  Boolean  @default(false)
+
+  @@id([studentId, guardianId])
+}
+
+// ---------------------------------------------------------------- attendance
+//
+// Recorded per teaching session, not per day: the V3 early-warning monitor
+// needs "missed 4 Maths classes this week", which a daily flag cannot answer.
+
+model AttendanceSession {
+  id             String       @id @default(cuid())
+  classSubjectId String
+  classSubject   ClassSubject @relation(fields: [classSubjectId], references: [id], onDelete: Cascade)
+  termId         String
+  term           Term         @relation(fields: [termId], references: [id], onDelete: Cascade)
+  date           DateTime // date only, normalised to 00:00 UTC
+  period         Int          @default(1)
+  takenById      String?
+  takenBy        Teacher?     @relation(fields: [takenById], references: [id], onDelete: SetNull)
+  notes          String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  records Attendance[]
+
+  @@unique([classSubjectId, date, period])
+  @@index([date])
+}
+
+model Attendance {
+  id        String            @id @default(cuid())
+  sessionId String
+  session   AttendanceSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  studentId String
+  student   Student           @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  status    String // AttendanceStatus: PRESENT | ABSENT | LATE | EXCUSED
+  remark    String?
+
+  @@unique([sessionId, studentId])
+  @@index([studentId])
+  @@index([status])
+}
+
+// ---------------------------------------------------------------- assessment
+
+model Assessment {
+  id             String       @id @default(cuid())
+  classSubjectId String
+  classSubject   ClassSubject @relation(fields: [classSubjectId], references: [id], onDelete: Cascade)
+  termId         String
+  term           Term         @relation(fields: [termId], references: [id], onDelete: Cascade)
+  name           String // "CAT 1"
+  kind           String // AssessmentKind: CAT | EXAM | ASSIGNMENT | PRACTICAL
+  maxScore       Float
+  weight         Float // contribution to the unit total, in percent
+  dueOn          DateTime?
+  publishedAt    DateTime?
+  createdAt      DateTime     @default(now())
+
+  marks Mark[]
+
+  @@index([classSubjectId])
+  @@index([termId])
+}
+
+model Mark {
+  id           String     @id @default(cuid())
+  assessmentId String
+  assessment   Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  studentId    String
+  student      Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  // null score = not handed in. Distinguishing that from a zero is what makes
+  // "missing work" countable.
+  score        Float?
+  submittedAt  DateTime?
+  enteredById  String?
+  enteredBy    Teacher?   @relation(fields: [enteredById], references: [id], onDelete: SetNull)
+  remark       String?
+  updatedAt    DateTime   @updatedAt
+
+  @@unique([assessmentId, studentId])
+  @@index([studentId])
+}
+
+// ---------------------------------------------------------------- timetable (read-only in V1)
+
+model Room {
+  id       String @id @default(cuid())
+  name     String @unique
+  capacity Int    @default(40)
+
+  slots TimetableSlot[]
+}
+
+model TimetableSlot {
+  id             String       @id @default(cuid())
+  classSubjectId String
+  classSubject   ClassSubject @relation(fields: [classSubjectId], references: [id], onDelete: Cascade)
+  dayOfWeek      Int // 1 = Monday .. 5 = Friday
+  startsAt       String // "08:00"
+  endsAt         String // "10:00"
+  roomId         String?
+  room           Room?        @relation(fields: [roomId], references: [id], onDelete: SetNull)
+
+  @@unique([classSubjectId, dayOfWeek, startsAt])
+  @@index([dayOfWeek])
+}
+
+// ---------------------------------------------------------------- fees
+
+model FeeInvoice {
+  id          String    @id @default(cuid())
+  studentId   String
+  student     Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  termId      String
+  term        Term      @relation(fields: [termId], references: [id], onDelete: Cascade)
+  description String // "Tuition", "Workshop & materials"
+  amount      Float // KSh
+  dueOn       DateTime
+  createdAt   DateTime  @default(now())
+
+  payments FeePayment[]
+
+  @@index([studentId])
+  @@index([termId])
+}
+
+model FeePayment {
+  id           String     @id @default(cuid())
+  invoiceId    String
+  invoice      FeeInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  amount       Float
+  method       String // PaymentMethod: MPESA | BANK | CASH
+  reference    String? // M-Pesa code or bank slip number
+  paidOn       DateTime   @default(now())
+  recordedById String?
+  recordedBy   User?      @relation(fields: [recordedById], references: [id], onDelete: SetNull)
+
+  @@index([invoiceId])
+  @@index([paidOn])
+}
+
+// ---------------------------------------------------------------- notice board
+
+model Announcement {
+  id        String   @id @default(cuid())
+  title     String
+  body      String
+  audience  String // Audience: ALL | STAFF | STUDENTS
+  pinned    Boolean  @default(false)
+  authorId  String?
+  author    User?    @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+// ---------------------------------------------------------------- audit
+
+model ActivityLog {
+  id        String   @id @default(cuid())
+  actorId   String?
+  actor     User?    @relation("ActorActivity", fields: [actorId], references: [id], onDelete: SetNull)
+  action    String // "student.created", "attendance.saved", ...
+  entity    String // "Student", "AttendanceSession", ...
+  entityId  String?
+  summary   String
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
