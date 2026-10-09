@@ -7,6 +7,8 @@ build
 *.db
 *.db-journal
 prisma/dev.db*
+# The seeded demo database IS committed: serverless deploys copy it to /tmp.
+!prisma/demo.db
 .DS_Store
 tsconfig.tsbuildinfo
 next-env.d.ts

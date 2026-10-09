@@ -1,5 +1,6 @@
 import { SignJWT, jwtVerify } from "jose";
 import type { Role } from "./enums";
+import { DEMO_AUTH_SECRET, isDemoMode } from "./demo";
 
 const COOKIE_NAME = "fellah_session";
 const MAX_AGE_SECONDS = 60 * 60 * 8;
@@ -13,7 +14,7 @@ export type SessionPayload = {
 };
 
 function secret() {
-  const value = process.env.AUTH_SECRET;
+  const value = process.env.AUTH_SECRET || (isDemoMode() ? DEMO_AUTH_SECRET : undefined);
   if (!value || value.length < 24) {
     throw new Error("AUTH_SECRET is missing or too short - see .env.example");
   }

@@ -12,7 +12,8 @@
     "db:push": "prisma db push",
     "db:seed": "prisma db seed",
     "db:reset": "rm -f prisma/dev.db && prisma db push && prisma db seed",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "db:demo": "rm -f prisma/demo.db && DATABASE_URL=file:./demo.db prisma db push --skip-generate && DATABASE_URL=file:./demo.db prisma db seed"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

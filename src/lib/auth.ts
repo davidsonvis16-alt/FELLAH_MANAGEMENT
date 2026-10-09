@@ -6,9 +6,7 @@ import { db } from "./db";
 import { sessionCookie, signSession, verifySession, type SessionPayload } from "./session";
 import { ROLE_HOME, type Role } from "./enums";
 
-export function isDemoMode(): boolean {
-  return process.env.DEMO_MODE === "true";
-}
+export { isDemoMode } from "./demo";
 
 export async function hashPassword(plain: string): Promise<string> {
   return bcrypt.hash(plain, 10);
